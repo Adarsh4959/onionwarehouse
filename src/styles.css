@@ -1,0 +1,35 @@
+body {
+    background-image: url("../public/images/warehouse.png");
+    background-size: cover;
+    background-attachment: fixed;
+    background-position: center;
+    font-family: Arial, sans-serif;
+  }
+  
+  .dashboard-container {
+    padding: 20px;
+  }
+  
+  .sensor-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    margin-top: 10px;
+  }
+  
+  .icon {
+    font-size: 1.5em;
+    margin-right: 10px;
+  }
+  
+  /* Fan Animation */
+  .fan-on {
+    animation: spin 2s linear infinite;
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
