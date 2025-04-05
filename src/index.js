@@ -13,9 +13,6 @@ root.render(
   </React.StrictMode>
 );
 
-app.get('/', (req, res) => {
-  res.send('🔥 Onion Warehouse Server is Live!');
-});
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
