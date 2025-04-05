@@ -1,89 +1,90 @@
-import React, { useState, useEffect } from "react";
+// src/WarehouseDashboard.js
+import React, { useEffect, useState } from "react";
+import { ref, onValue, set } from "firebase/database";
+import { database } from "./firebase";
 import { Container, Row, Col, Card, Button } from "react-bootstrap";
-import { FaTemperatureHigh, FaTint, FaFan, FaBoxOpen, FaCloudMeatball } from "react-icons/fa";
+import { FaTemperatureHigh, FaTint, FaCloudMeatball, FaBoxOpen, FaFan } from "react-icons/fa";
 import "./styles.css";
 
 const WarehouseDashboard = () => {
-  const [sensorData, setSensorData] = useState({
+  const [data, setData] = useState({
     warehouse1: {},
     warehouse2: {},
-    totalCapacity: 10000, // Example total capacity
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("http://localhost:5000/api/warehouse-data");
-        const data = await response.json();
+    const dbRef1 = ref(database, "warehouse1");
+    const dbRef2 = ref(database, "warehouse2");
 
-        if (Array.isArray(data) && data.length === 2) {
-          const warehouse1 = data.find((w) => w.warehouse_id === 1) || {};
-          const warehouse2 = data.find((w) => w.warehouse_id === 2) || {};
+    const unsubscribe1 = onValue(dbRef1, (snapshot) => {
+      setData((prev) => ({
+        ...prev,
+        warehouse1: snapshot.val() || {},
+      }));
+    });
 
-          setSensorData({
-            warehouse1: {
-              temperature: warehouse1.temperature ?? "--",
-              humidity: warehouse1.humidity ?? "--",
-              methane: warehouse1.methane_level ?? "--",
-              weight: warehouse1.onion_weight ?? "--",
-              fan: warehouse1.fan_status === "ON",
-            },
-            warehouse2: {
-              temperature: warehouse2.temperature ?? "--",
-              humidity: warehouse2.humidity ?? "--",
-              methane: warehouse2.methane_level ?? "--",
-              weight: warehouse2.onion_weight ?? "--",
-              fan: warehouse2.fan_status === "ON",
-            },
-            totalCapacity: 10000,
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
+    const unsubscribe2 = onValue(dbRef2, (snapshot) => {
+      setData((prev) => ({
+        ...prev,
+        warehouse2: snapshot.val() || {},
+      }));
+    });
+
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
     };
-
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
   }, []);
 
-  // Function to toggle fan status
-  const toggleFan = async (warehouseId) => {
-    const newFanStatus =
-      warehouseId === 1
-        ? !sensorData.warehouse1.fan
-        : !sensorData.warehouse2.fan;
-
-    try {
-      const response = await fetch("http://localhost:5000/api/update-fan", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          warehouse_id: warehouseId,
-          fan_status: newFanStatus ? "ON" : "OFF",
-        }),
-      });
-
-      if (response.ok) {
-        setSensorData((prevData) => ({
-          ...prevData,
-          [`warehouse${warehouseId}`]: {
-            ...prevData[`warehouse${warehouseId}`],
-            fan: newFanStatus,
-          },
-        }));
-      } else {
-        console.error("Failed to update fan status");
-      }
-    } catch (error) {
-      console.error("Error updating fan status:", error);
-    }
+  const toggleFan = (warehouse) => {
+    const fanStatus = data[warehouse]?.fan_status === "ON" ? "OFF" : "ON";
+    set(ref(database, `${warehouse}/fan_status`), fanStatus);
   };
 
-  const totalOnionWeight =
-    (sensorData?.warehouse1?.weight || 0) + (sensorData?.warehouse2?.weight || 0);
-  const vacantWeight = sensorData.totalCapacity - totalOnionWeight;
+  const totalCapacity = 10000;
+  const weight1 = Number(data?.warehouse1?.onion_weight || 0);
+  const weight2 = Number(data?.warehouse2?.onion_weight || 0);
+  const totalWeight = weight1 + weight2;
+  const vacantWeight = totalCapacity - totalWeight;
+
+  const renderWarehouse = (warehouseData, id) => (
+    <Col md={6}>
+      <Card className="warehouse-card text-center">
+        <Card.Body>
+          <Card.Title className="warehouse-title">{`Warehouse ${id}`}</Card.Title>
+          <div className="sensor-card">
+            <FaTemperatureHigh className="icon text-danger" />{" "}
+            {warehouseData?.temperature ?? "--"}°C
+          </div>
+          <div className="sensor-card">
+            <FaTint className="icon text-info" /> {warehouseData?.humidity ?? "--"}%
+          </div>
+          <div className="sensor-card">
+            <FaCloudMeatball className="icon text-warning" /> {warehouseData?.methane ?? "--"} ppm
+          </div>
+          <div className="sensor-card">
+            <FaBoxOpen className="icon text-success" /> {warehouseData?.onion_weight ?? "--"} kg
+          </div>
+          <div className="sensor-card">
+            <FaFan
+              className={
+                warehouseData?.fan_status === "ON"
+                  ? "fan-on icon text-primary"
+                  : "icon text-muted"
+              }
+            />{" "}
+            {warehouseData?.fan_status ?? "OFF"}
+          </div>
+          <Button
+            variant={warehouseData?.fan_status === "ON" ? "danger" : "success"}
+            onClick={() => toggleFan(`warehouse${id}`)}
+          >
+            {warehouseData?.fan_status === "ON" ? "Turn OFF" : "Turn ON"} Fan
+          </Button>
+        </Card.Body>
+      </Card>
+    </Col>
+  );
 
   return (
     <Container fluid className="dashboard-container">
@@ -92,95 +93,15 @@ const WarehouseDashboard = () => {
       </h2>
 
       <Row>
-        {/* Warehouse 1 */}
-        <Col md={6}>
-          <Card className="warehouse-card text-center">
-            <Card.Body>
-              <Card.Title className="warehouse-title">Warehouse 1</Card.Title>
-              <div className="sensor-card">
-                <FaTemperatureHigh className="icon text-danger" />{" "}
-                {sensorData?.warehouse1?.temperature}°C
-              </div>
-              <div className="sensor-card">
-                <FaTint className="icon text-info" />{" "}
-                {sensorData?.warehouse1?.humidity}%
-              </div>
-              <div className="sensor-card">
-                <FaCloudMeatball className="icon text-warning" />{" "}
-                {sensorData?.warehouse1?.methane} ppm
-              </div>
-              <div className="sensor-card">
-                <FaBoxOpen className="icon text-success" />{" "}
-                {sensorData?.warehouse1?.weight} kg
-              </div>
-              <div className="sensor-card">
-                <FaFan
-                  className={
-                    sensorData?.warehouse1?.fan
-                      ? "fan-on icon text-primary"
-                      : "icon text-muted"
-                  }
-                />{" "}
-                {sensorData?.warehouse1?.fan ? "ON" : "OFF"}
-              </div>
-              <Button
-                variant={sensorData?.warehouse1?.fan ? "danger" : "success"}
-                onClick={() => toggleFan(1)}
-              >
-                {sensorData?.warehouse1?.fan ? "Turn OFF" : "Turn ON"} Fan
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {/* Warehouse 2 */}
-        <Col md={6}>
-          <Card className="warehouse-card text-center">
-            <Card.Body>
-              <Card.Title className="warehouse-title">Warehouse 2</Card.Title>
-              <div className="sensor-card">
-                <FaTemperatureHigh className="icon text-danger" />{" "}
-                {sensorData?.warehouse2?.temperature}°C
-              </div>
-              <div className="sensor-card">
-                <FaTint className="icon text-info" />{" "}
-                {sensorData?.warehouse2?.humidity}%
-              </div>
-              <div className="sensor-card">
-                <FaCloudMeatball className="icon text-warning" />{" "}
-                {sensorData?.warehouse2?.methane} ppm
-              </div>
-              <div className="sensor-card">
-                <FaBoxOpen className="icon text-success" />{" "}
-                {sensorData?.warehouse2?.weight} kg
-              </div>
-              <div className="sensor-card">
-                <FaFan
-                  className={
-                    sensorData?.warehouse2?.fan
-                      ? "fan-on icon text-primary"
-                      : "icon text-muted"
-                  }
-                />{" "}
-                {sensorData?.warehouse2?.fan ? "ON" : "OFF"}
-              </div>
-              <Button
-                variant={sensorData?.warehouse2?.fan ? "danger" : "success"}
-                onClick={() => toggleFan(2)}
-              >
-                {sensorData?.warehouse2?.fan ? "Turn OFF" : "Turn ON"} Fan
-              </Button>
-            </Card.Body>
-          </Card>
-        </Col>
+        {renderWarehouse(data?.warehouse1, 1)}
+        {renderWarehouse(data?.warehouse2, 2)}
       </Row>
 
-      {/* Vacant Capacity */}
       <Row className="mt-4">
         <Col md={12}>
           <Card className="shadow-lg text-center bg-dark text-light">
             <Card.Body>
-              <Card.Title>Total Vacant Weight</Card.Title>
+              <Card.Title>Total Vacant Capacity</Card.Title>
               <h3 className="text-warning">{vacantWeight} kg</h3>
             </Card.Body>
           </Card>
