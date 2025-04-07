@@ -42,8 +42,8 @@ const WarehouseDashboard = () => {
   };
 
   const totalCapacity = 10000;
-  const weight1 = Number(data?.warehouse1?.onion_weight || 0);
-  const weight2 = Number(data?.warehouse2?.onion_weight || 0);
+  const weight1 = Number(data?.warehouse1?.weight || 0);
+  const weight2 = Number(data?.warehouse2?.weight || 0);
   const totalWeight = weight1 + weight2;
   const vacantWeight = totalCapacity - totalWeight;
 
@@ -63,7 +63,7 @@ const WarehouseDashboard = () => {
             <FaCloudMeatball className="icon text-warning" /> {warehouseData?.methane ?? "--"} ppm
           </div>
           <div className="sensor-card">
-            <FaBoxOpen className="icon text-success" /> {warehouseData?.onion_weight ?? "--"} kg
+            <FaBoxOpen className="icon text-success" /> {warehouseData?.weight ?? "--"} kg
           </div>
           <div className="sensor-card">
             <FaFan
