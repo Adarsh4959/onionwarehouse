@@ -25,38 +25,48 @@ const WarehouseDashboard = () => {
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  // Sync fan of warehouse1 to flame status of warehouse2
+  // Auto sync fan of warehouse1 to flame level from warehouse2
   useEffect(() => {
-    const flame = data.warehouse2.flame_status;
+    const flame = Number(data.warehouse2.flame);
     const fan1 = data.warehouse1.fan_status;
-    if (flame === "High" && fan1 !== "ON") set(ref(database, "warehouse1/fan_status"), "ON");
-    if (flame === "Low" && fan1 !== "OFF") set(ref(database, "warehouse1/fan_status"), "OFF");
-  }, [data.warehouse2.flame_status]);
+
+    if (flame <= 100 && fan1 !== "ON") {
+      set(ref(database, "warehouse1/fan_status"), "ON");
+    }
+
+    if (flame > 100 && fan1 !== "OFF") {
+      set(ref(database, "warehouse1/fan_status"), "OFF");
+    }
+  }, [data.warehouse2.flame]);
 
   const handleToggle = warehouse => {
     const current = data[warehouse].fan_status;
     const next = current === "ON" ? "OFF" : "ON";
-    // emergency when turning off during High flame
-    if (warehouse === "warehouse1" && data.warehouse2.flame_status === "High" && next === "OFF") {
+    const flame = Number(data.warehouse2.flame);
+
+    // Emergency if trying to turn OFF fan when flame is detected
+    if (warehouse === "warehouse1" && flame <= 100 && next === "OFF") {
       setConfirmState({
         show: true,
         warehouse,
         next,
-        message: "🔥 Flame is still high! Turning off the fan may damage the onions. Click confirm to proceed."
+        message: "🔥 Flame has been detected (value ≤ 100)! Turning off the fan may damage the onions. Click confirm to proceed."
       });
       return;
     }
-    // caution when turning on during Low flame
-    if (warehouse === "warehouse1" && data.warehouse2.flame_status === "Low" && next === "ON") {
+
+    // Caution when turning fan ON unnecessarily
+    if (warehouse === "warehouse1" && flame > 100 && next === "ON") {
       setConfirmState({
         show: true,
         warehouse,
         next,
-        message: "⚠️ Flame is low. Unnecessary fan operation may affect onion quality. Confirm to proceed."
+        message: "⚠️ No flame detected (value > 100). Unnecessary fan operation may affect onion quality. Confirm to proceed."
       });
       return;
     }
-    // direct toggle
+
+    // Direct toggle
     set(ref(database, `${warehouse}/fan_status`), next);
   };
 
@@ -78,6 +88,7 @@ const WarehouseDashboard = () => {
 
   const renderWarehouse = (warehouseData, id) => {
     const is2 = id === 2;
+    const flame = Number(warehouseData.flame);
     return (
       <Col md={6}>
         <Card className="warehouse-card text-center">
@@ -97,9 +108,9 @@ const WarehouseDashboard = () => {
               </>
             ) : (
               <>
-                {renderSensorCard(<FaFire />, warehouseData.flame_status ?? "--", "text-danger")}
-                {warehouseData.flame_status === "High" && (
-                  <div className="alert alert-danger mt-3">🔥 Automatic fan ON in Warehouse 1</div>
+                {renderSensorCard(<FaFire />, `${warehouseData.flame ?? "--"}`, "text-danger")}
+                {flame <= 100 && (
+                  <div className="alert alert-danger mt-3">🔥 Flame has been detected and fan is being actuated automatically</div>
                 )}
                 <Button variant="secondary" style={{ visibility: "hidden" }}>Placeholder</Button>
               </>
@@ -113,12 +124,27 @@ const WarehouseDashboard = () => {
   return (
     <Container fluid className="dashboard-container">
       <h2 className="text-center text-light mb-4">Onion Warehouse Monitoring Dashboard</h2>
-      <Row>{renderWarehouse(data.warehouse1, 1)}{renderWarehouse(data.warehouse2, 2)}</Row>
-      <Row className="mt-4"><Col md={12}><Card className="shadow-lg text-center bg-dark text-light"><Card.Body><Card.Title>Total Vacant Capacity</Card.Title><h3 className="text-warning">{vacantWeight} kg</h3></Card.Body></Card></Col></Row>
+      <Row>
+        {renderWarehouse(data.warehouse1, 1)}
+        {renderWarehouse(data.warehouse2, 2)}
+      </Row>
+      <Row className="mt-4">
+        <Col md={12}>
+          <Card className="shadow-lg text-center bg-dark text-light">
+            <Card.Body>
+              <Card.Title>Total Vacant Capacity</Card.Title>
+              <h3 className="text-warning">{vacantWeight} kg</h3>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
       {/* Confirmation Toast */}
       <ToastContainer position="top-end" className="p-3">
         <Toast show={confirmState.show} onClose={() => setConfirmState(prev => ({ ...prev, show: false }))} delay={5000} autohide>
-          <Toast.Header><strong className="me-auto">Action Required</strong></Toast.Header>
+          <Toast.Header>
+            <strong className="me-auto">Action Required</strong>
+          </Toast.Header>
           <Toast.Body>
             {confirmState.message}
             <div className="mt-2 text-end">
