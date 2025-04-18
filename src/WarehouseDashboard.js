@@ -25,7 +25,7 @@ const WarehouseDashboard = () => {
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  // Auto sync fan of warehouse1 to flame level from warehouse2
+  // Auto sync fan of warehouse1 based on flame level from warehouse2
   useEffect(() => {
     const flame = Number(data.warehouse2.flame);
     const fan1 = data.warehouse1.fan_status;
@@ -50,18 +50,18 @@ const WarehouseDashboard = () => {
         show: true,
         warehouse,
         next,
-        message: "🔥 Flame has been detected (value ≤ 100)! Turning off the fan may damage the onions. Click confirm to proceed."
+        message: "🔥 Flame has been detected! Turning off the fan may be dangerous. Click confirm to proceed."
       });
       return;
     }
 
-    // Caution when turning fan ON unnecessarily
+    // Caution if turning ON when no flame
     if (warehouse === "warehouse1" && flame > 100 && next === "ON") {
       setConfirmState({
         show: true,
         warehouse,
         next,
-        message: "⚠️ No flame detected (value > 100). Unnecessary fan operation may affect onion quality. Confirm to proceed."
+        message: "⚠️ No flame detected. Unnecessary fan operation may affect onion storage. Confirm to proceed."
       });
       return;
     }
@@ -88,7 +88,9 @@ const WarehouseDashboard = () => {
 
   const renderWarehouse = (warehouseData, id) => {
     const is2 = id === 2;
-    const flame = Number(warehouseData.flame);
+    const flame = Number(data.warehouse2.flame);
+    const flameStatus = flame <= 100 ? "High" : "Low";
+
     return (
       <Col md={6}>
         <Card className="warehouse-card text-center">
@@ -108,11 +110,13 @@ const WarehouseDashboard = () => {
               </>
             ) : (
               <>
-                {renderSensorCard(<FaFire />, `${warehouseData.flame ?? "--"}`, "text-danger")}
+                {renderSensorCard(<FaFire />, `Flame: ${flameStatus}`, "text-danger")}
                 {flame <= 100 && (
-                  <div className="alert alert-danger mt-3">🔥 Flame has been detected and fan is being actuated automatically</div>
+                  <div className="alert alert-danger mt-3">
+                    🔥 Flame has been detected and fan is being actuated automatically
+                  </div>
                 )}
-                <Button variant="secondary" style={{ visibility: "hidden" }}>Placeholder</Button>
+                <Button variant="secondary" style={{ visibility: "hidden" }}>Hidden</Button>
               </>
             )}
           </Card.Body>
