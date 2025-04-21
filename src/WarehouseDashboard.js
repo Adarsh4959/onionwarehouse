@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { database } from "./firebase";
-import { Container, Row, Col, Card, Button, Toast, ToastContainer } from "react-bootstrap";
+import { Container, Row, Col, Card, Toast, ToastContainer } from "react-bootstrap";
 import {
   FaTemperatureHigh,
   FaTint,
@@ -20,61 +20,32 @@ const WarehouseDashboard = () => {
   useEffect(() => {
     const dbRef1 = ref(database, "warehouse1");
     const dbRef2 = ref(database, "warehouse2");
+
     const unsub1 = onValue(dbRef1, snap => setData(prev => ({ ...prev, warehouse1: snap.val() || {} })));
     const unsub2 = onValue(dbRef2, snap => setData(prev => ({ ...prev, warehouse2: snap.val() || {} })));
+
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  // Auto sync fan of warehouse1 based on flame level from warehouse2
+  // Auto control fan in Warehouse 1 based on avg_humidity
   useEffect(() => {
-    const flame = Number(data.warehouse2.flame);
-    const fan1 = data.warehouse1.fan_status;
+    const avgH = Number(data.warehouse1.avg_humidity);
+    let fanStatus = data.warehouse1.fan_status;
 
-    if (flame <= 100 && fan1 !== "ON") {
-      set(ref(database, "warehouse1/fan_status"), "ON");
+    if (!isNaN(avgH)) {
+      if (avgH < 60) {
+        fanStatus = "HALF";
+      } else if (avgH >= 60 && avgH <= 69) {
+        fanStatus = "OFF";
+      } else if (avgH > 70) {
+        fanStatus = "FULL";
+      }
+
+      if (data.warehouse1.fan_status !== fanStatus) {
+        set(ref(database, "warehouse1/fan_status"), fanStatus);
+      }
     }
-
-    if (flame > 100 && fan1 !== "OFF") {
-      set(ref(database, "warehouse1/fan_status"), "OFF");
-    }
-  }, [data.warehouse2.flame]);
-
-  const handleToggle = warehouse => {
-    const current = data[warehouse].fan_status;
-    const next = current === "ON" ? "OFF" : "ON";
-    const flame = Number(data.warehouse2.flame);
-
-    // Emergency if trying to turn OFF fan when flame is detected
-    if (warehouse === "warehouse1" && flame <= 100 && next === "OFF") {
-      setConfirmState({
-        show: true,
-        warehouse,
-        next,
-        message: "🔥 Flame has been detected! Turning off the fan may be dangerous. Click confirm to proceed."
-      });
-      return;
-    }
-
-    // Caution if turning ON when no flame
-    if (warehouse === "warehouse1" && flame > 100 && next === "ON") {
-      setConfirmState({
-        show: true,
-        warehouse,
-        next,
-        message: "⚠️ No flame detected. Unnecessary fan operation may affect onion storage. Confirm to proceed."
-      });
-      return;
-    }
-
-    // Direct toggle
-    set(ref(database, `${warehouse}/fan_status`), next);
-  };
-
-  const confirmAction = () => {
-    const { warehouse, next } = confirmState;
-    set(ref(database, `${warehouse}/fan_status`), next);
-    setConfirmState({ show: false, message: "", warehouse: "", next: "" });
-  };
+  }, [data.warehouse1.avg_humidity]);
 
   const totalCapacity = 10000;
   const weight1 = Number(data.warehouse1.weight || 0);
@@ -87,36 +58,39 @@ const WarehouseDashboard = () => {
   );
 
   const renderWarehouse = (warehouseData, id) => {
-    const is2 = id === 2;
-    const flame = Number(data.warehouse2.flame);
-    const flameStatus = flame <= 100 ? "High" : "Low";
-
+    const isSecond = id === 2;
+    const flame = Number(warehouseData.flame ?? -1);
     return (
-      <Col md={6}>
+      <Col md={6} className="mb-4">
         <Card className="warehouse-card text-center">
           <Card.Body>
-            <Card.Title>Warehouse {id}</Card.Title>
+            <Card.Title>{id === 1 ? "Onion Monitoring" : "Warehouse Monitoring"}</Card.Title>
             {renderSensorCard(<FaTemperatureHigh />, `${warehouseData.temperature ?? "--"}°C`, "text-danger")}
             {renderSensorCard(<FaTint />, `${warehouseData.humidity ?? "--"}%`, "text-info")}
             {renderSensorCard(<FaCloudMeatball />, `${warehouseData.methane ?? "--"} ppm`, "text-warning")}
-            {!is2 ? (
+
+            {!isSecond ? (
               <>
                 {renderSensorCard(<FaBoxOpen />, `${warehouseData.weight ?? "--"} kg`, "text-success")}
-                {renderSensorCard(<FaFan />, warehouseData.fan_status ?? "OFF", warehouseData.fan_status === "ON" ? "fan-on text-primary" : "text-muted")}
-                <Button variant={warehouseData.fan_status === "ON" ? "danger" : "success"}
-                  onClick={() => handleToggle(`warehouse${id}`)}>
-                  {warehouseData.fan_status === "ON" ? "Turn OFF" : "Turn ON"} Fan
-                </Button>
+                {renderSensorCard(
+                  <FaFan />,
+                  `Fan: ${warehouseData.fan_status ?? "OFF"}`,
+                  warehouseData.fan_status === "FULL"
+                    ? "text-danger fan-on"
+                    : warehouseData.fan_status === "HALF"
+                    ? "text-warning fan-on"
+                    : "text-muted"
+                )}
               </>
             ) : (
               <>
-                {renderSensorCard(<FaFire />, `Flame: ${flameStatus}`, "text-danger")}
-                {flame <= 100 && (
-                  <div className="alert alert-danger mt-3">
-                    🔥 Flame has been detected and fan is being actuated automatically
-                  </div>
+                {renderSensorCard(
+                  <FaFire />,
+                  `Flame: ${warehouseData.flame ?? "--"} - ${
+                    flame < 100 ? "🔥 High Flame" : "✅ Low Flame"
+                  }`,
+                  flame < 100 ? "text-danger" : "text-success"
                 )}
-                <Button variant="secondary" style={{ visibility: "hidden" }}>Hidden</Button>
               </>
             )}
           </Card.Body>
@@ -127,13 +101,27 @@ const WarehouseDashboard = () => {
 
   return (
     <Container fluid className="dashboard-container">
-      <h2 className="text-center text-light mb-4">Onion Warehouse Monitoring Dashboard</h2>
+      <h2 className="text-center text-light mb-4">Smart Allium Cepa Preservation System using IOT</h2>
       <Row>
         {renderWarehouse(data.warehouse1, 1)}
         {renderWarehouse(data.warehouse2, 2)}
       </Row>
+
+      {/* Average Humidity Box */}
       <Row className="mt-4">
-        <Col md={12}>
+        <Col md={6}>
+          <Card className="shadow-lg text-center bg-dark text-light">
+            <Card.Body>
+              <Card.Title>Average Humidity</Card.Title>
+              <h3 className="text-info">
+                {data.warehouse1.avg_humidity ? `${data.warehouse1.avg_humidity} %` : "--"}
+              </h3>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        {/* Vacant Capacity */}
+        <Col md={6}>
           <Card className="shadow-lg text-center bg-dark text-light">
             <Card.Body>
               <Card.Title>Total Vacant Capacity</Card.Title>
@@ -143,18 +131,18 @@ const WarehouseDashboard = () => {
         </Col>
       </Row>
 
-      {/* Confirmation Toast */}
+      {/* Notification Toast */}
       <ToastContainer position="top-end" className="p-3">
-        <Toast show={confirmState.show} onClose={() => setConfirmState(prev => ({ ...prev, show: false }))} delay={5000} autohide>
+        <Toast
+          show={confirmState.show}
+          onClose={() => setConfirmState(prev => ({ ...prev, show: false }))}
+          delay={5000}
+          autohide
+        >
           <Toast.Header>
-            <strong className="me-auto">Action Required</strong>
+            <strong className="me-auto">Notification</strong>
           </Toast.Header>
-          <Toast.Body>
-            {confirmState.message}
-            <div className="mt-2 text-end">
-              <Button size="sm" variant="primary" onClick={confirmAction}>Confirm</Button>
-            </div>
-          </Toast.Body>
+          <Toast.Body>{confirmState.message}</Toast.Body>
         </Toast>
       </ToastContainer>
     </Container>
