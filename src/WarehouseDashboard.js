@@ -1,4 +1,3 @@
-// src/WarehouseDashboard.js
 import React, { useEffect, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { database } from "./firebase";
@@ -14,22 +13,38 @@ import {
 import "./styles.css";
 
 const WarehouseDashboard = () => {
-  const [data, setData] = useState({ warehouse1: {}, warehouse2: {} });
+  const [data, setData] = useState({
+    warehouse1: {},
+    warehouse2: {},
+    avg_humidity: null
+  });
   const [confirmState, setConfirmState] = useState({ show: false, message: "", warehouse: "", next: "" });
 
   useEffect(() => {
     const dbRef1 = ref(database, "warehouse1");
     const dbRef2 = ref(database, "warehouse2");
+    const avgHumidityRef = ref(database, "avg_humidity");
 
-    const unsub1 = onValue(dbRef1, snap => setData(prev => ({ ...prev, warehouse1: snap.val() || {} })));
-    const unsub2 = onValue(dbRef2, snap => setData(prev => ({ ...prev, warehouse2: snap.val() || {} })));
+    const unsub1 = onValue(dbRef1, snap =>
+      setData(prev => ({ ...prev, warehouse1: snap.val() || {} }))
+    );
+    const unsub2 = onValue(dbRef2, snap =>
+      setData(prev => ({ ...prev, warehouse2: snap.val() || {} }))
+    );
+    const unsub3 = onValue(avgHumidityRef, snap =>
+      setData(prev => ({ ...prev, avg_humidity: snap.val() }))
+    );
 
-    return () => { unsub1(); unsub2(); };
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
   }, []);
 
   // Auto control fan in Warehouse 1 based on avg_humidity
   useEffect(() => {
-    const avgH = Number(data.warehouse1.avg_humidity);
+    const avgH = Number(data.avg_humidity);
     let fanStatus = data.warehouse1.fan_status;
 
     if (!isNaN(avgH)) {
@@ -45,7 +60,7 @@ const WarehouseDashboard = () => {
         set(ref(database, "warehouse1/fan_status"), fanStatus);
       }
     }
-  }, [data.warehouse1.avg_humidity]);
+  }, [data.avg_humidity, data.warehouse1.fan_status]);
 
   const totalCapacity = 10000;
   const weight1 = Number(data.warehouse1.weight || 0);
@@ -114,7 +129,7 @@ const WarehouseDashboard = () => {
             <Card.Body>
               <Card.Title>Average Humidity</Card.Title>
               <h3 className="text-info">
-                {data.warehouse1.avg_humidity ? `${data.warehouse1.avg_humidity} %` : "--"}
+                {data.avg_humidity !== null ? `${data.avg_humidity} %` : "--"}
               </h3>
             </Card.Body>
           </Card>
